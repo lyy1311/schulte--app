@@ -1,0 +1,224 @@
+name: Build Schulte APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create Android project
+        run: |
+          mkdir -p app/src/main/java/com/example/schulte
+          mkdir -p app/src/main/res/values
+
+          cat > settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "SchulteApp"
+          include(":app")
+          EOF
+
+          cat > build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.7.3' apply false
+          }
+          EOF
+
+          cat > app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace 'com.example.schulte'
+              compileSdk 35
+
+              defaultConfig {
+                  applicationId 'com.example.schulte'
+                  minSdk 23
+                  targetSdk 35
+                  versionCode 2
+                  versionName '2.0'
+              }
+          }
+          EOF
+
+          cat > app/src/main/res/values/styles.xml <<'EOF'
+          <resources>
+              <style name="AppTheme"
+                  parent="android:style/Theme.Material.Light.NoActionBar">
+                  <item name="android:fontFamily">sans</item>
+                  <item name="android:colorAccent">#111827</item>
+                  <item name="android:navigationBarColor">#111827</item>
+              </style>
+          </resources>
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application
+                  android:theme="@style/AppTheme"
+                  android:label="舒尔特训练">
+                  <activity
+                      android:name=".MainActivity"
+                      android:screenOrientation="portrait"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat > app/src/main/java/com/example/schulte/MainActivity.java <<'EOF'
+          package com.example.schulte;
+
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+
+          public class MainActivity extends Activity {
+              @Override
+              public void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+
+                  WebView web = new WebView(this);
+                  web.setWebViewClient(new WebViewClient());
+
+                  WebSettings settings = web.getSettings();
+                  settings.setJavaScriptEnabled(true);
+                  settings.setDomStorageEnabled(true);
+                  settings.setBuiltInZoomControls(false);
+                  settings.setDisplayZoomControls(false);
+
+                  String html =
+                      "<!doctype html>" +
+                      "<html><head>" +
+                      "<meta name='viewport' content='width=device-width,initial-scale=1'>" +
+                      "<style>" +
+                      "body{margin:0;background:#f4f5f7;font-family:sans-serif;color:#111827}" +
+                      ".app{max-width:680px;margin:auto;padding:20px 14px}" +
+                      "h1{text-align:center}" +
+                      ".card{background:white;border-radius:20px;padding:18px;margin:12px 0}" +
+                      "button{border:0;border-radius:12px;padding:14px;font-size:16px;font-weight:bold}" +
+                      ".primary{background:#111827;color:white;width:100%}" +
+                      "#board{display:grid;gap:6px;margin-top:15px}" +
+                      ".cell{aspect-ratio:1;background:white;border:0;border-radius:10px;font-size:25px;font-weight:bold}" +
+                      ".done{background:#d1fae5}" +
+                      ".wrong{background:#fecaca}" +
+                      "select{padding:12px;border:0;border-radius:10px;background:#eee}" +
+                      "</style></head><body>" +
+                      "<div class='app'>" +
+                      "<h1>🧠 舒尔特训练</h1>" +
+                      "<div class='card'>" +
+                      "<p>方格大小：</p>" +
+                      "<select id='size'>" +
+                      "<option>3</option><option>4</option>" +
+                      "<option selected>5</option><option>6</option>" +
+                      "<option>7</option><option>8</option><option>9</option>" +
+                      "</select>" +
+                      "<p>模式：</p>" +
+                      "<select id='mode'>" +
+                      "<option value='normal'>正序 1 → N</option>" +
+                      "<option value='reverse'>倒序 N → 1</option>" +
+                      "</select>" +
+                      "</div>" +
+                      "<div class='card' style='text-align:center'>" +
+                      "<b id='time'>0.00</b> 秒　目标：<b id='target'>1</b>　错误：<b id='wrong'>0</b>" +
+                      "</div>" +
+                      "<div id='board'></div>" +
+                      "<div class='card'>" +
+                      "<button class='primary' onclick='start()'>开始新一局</button>" +
+                      "</div>" +
+                      "</div>" +
+                      "<script>" +
+                      "let n=5,target=1,mode='normal',startTime=0,timer=null,wrong=0;" +
+                      "function shuffle(a){for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}" +
+                      "function start(){" +
+                      "n=+document.getElementById('size').value;" +
+                      "mode=document.getElementById('mode').value;" +
+                      "let total=n*n;" +
+                      "target=mode==='normal'?1:total;" +
+                      "wrong=0;" +
+                      "document.getElementById('wrong').textContent=0;" +
+                      "document.getElementById('target').textContent=target;" +
+                      "let a=shuffle(Array.from({length:total},(_,i)=>i+1));" +
+                      "let board=document.getElementById('board');" +
+                      "board.style.gridTemplateColumns='repeat('+n+',1fr)';" +
+                      "board.innerHTML='';" +
+                      "a.forEach(x=>{" +
+                      "let b=document.createElement('button');" +
+                      "b.className='cell';b.textContent=x;" +
+                      "b.onclick=()=>tap(b,x);board.appendChild(b)" +
+                      "});" +
+                      "startTime=performance.now();clearInterval(timer);" +
+                      "timer=setInterval(()=>document.getElementById('time').textContent=((performance.now()-startTime)/1000).toFixed(2),30)" +
+                      "}" +
+                      "function tap(b,x){" +
+                      "if(x!==target){wrong++;document.getElementById('wrong').textContent=wrong;b.classList.add('wrong');return}" +
+                      "b.classList.add('done');b.disabled=true;" +
+                      "target=mode==='normal'?target+1:target-1;" +
+                      "let total=n*n;" +
+                      "if((mode==='normal'&&target>total)||(mode==='reverse'&&target<1)){" +
+                      "clearInterval(timer);" +
+                      "let t=((performance.now()-startTime)/1000).toFixed(2);" +
+                      "setTimeout(()=>alert('完成！\\n用时：'+t+' 秒\\n错误：'+wrong+' 次'),100)" +
+                      "}else document.getElementById('target').textContent=target" +
+                      "}" +
+                      "start();" +
+                      "</script></body></html>";
+
+                  web.loadDataWithBaseURL(
+                      null,
+                      html,
+                      "text/html",
+                      "UTF-8",
+                      null
+                  );
+
+                  setContentView(web);
+              }
+          }
+          EOF
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build APK
+        run: |
+          gradle wrapper --gradle-version 8.10.2
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Schulte-App-v2
+          path: app/build/outputs/apk/debug/app-debug.apk
