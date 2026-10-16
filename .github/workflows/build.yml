@@ -12,10 +12,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - name: Create Android project
+        shell: bash
         run: |
           mkdir -p app/src/main/java/com/example/schulte
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/assets
 
           cat > settings.gradle <<'EOF'
           pluginManagement {
@@ -25,6 +33,7 @@ jobs:
                   gradlePluginPortal()
               }
           }
+
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
               repositories {
@@ -32,6 +41,7 @@ jobs:
                   mavenCentral()
               }
           }
+
           rootProject.name = "SchulteApp"
           include(":app")
           EOF
@@ -55,8 +65,8 @@ jobs:
                   applicationId 'com.example.schulte'
                   minSdk 23
                   targetSdk 35
-                  versionCode 2
-                  versionName '2.0'
+                  versionCode 3
+                  versionName '3.0'
               }
           }
           EOF
@@ -66,8 +76,10 @@ jobs:
               <style name="AppTheme"
                   parent="android:style/Theme.Material.Light.NoActionBar">
                   <item name="android:fontFamily">sans</item>
-                  <item name="android:colorAccent">#111827</item>
+                  <item name="android:windowActionModeOverlay">true</item>
                   <item name="android:navigationBarColor">#111827</item>
+                  <item name="android:statusBarColor">#F4F5F7</item>
+                  <item name="android:windowLightStatusBar">true</item>
               </style>
           </resources>
           EOF
@@ -76,15 +88,20 @@ jobs:
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
                   android:theme="@style/AppTheme"
-                  android:label="舒尔特训练">
+                  android:label="舒尔特训练"
+                  android:allowBackup="true"
+                  android:supportsRtl="true">
+
                   <activity
                       android:name=".MainActivity"
                       android:screenOrientation="portrait"
                       android:exported="true">
+
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN"/>
                           <category android:name="android.intent.category.LAUNCHER"/>
                       </intent-filter>
+
                   </activity>
               </application>
           </manifest>
@@ -100,11 +117,13 @@ jobs:
           import android.webkit.WebViewClient;
 
           public class MainActivity extends Activity {
+
               @Override
               public void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
 
                   WebView web = new WebView(this);
+
                   web.setWebViewClient(new WebViewClient());
 
                   WebSettings settings = web.getSettings();
@@ -113,101 +132,917 @@ jobs:
                   settings.setBuiltInZoomControls(false);
                   settings.setDisplayZoomControls(false);
 
-                  String html =
-                      "<!doctype html>" +
-                      "<html><head>" +
-                      "<meta name='viewport' content='width=device-width,initial-scale=1'>" +
-                      "<style>" +
-                      "body{margin:0;background:#f4f5f7;font-family:sans-serif;color:#111827}" +
-                      ".app{max-width:680px;margin:auto;padding:20px 14px}" +
-                      "h1{text-align:center}" +
-                      ".card{background:white;border-radius:20px;padding:18px;margin:12px 0}" +
-                      "button{border:0;border-radius:12px;padding:14px;font-size:16px;font-weight:bold}" +
-                      ".primary{background:#111827;color:white;width:100%}" +
-                      "#board{display:grid;gap:6px;margin-top:15px}" +
-                      ".cell{aspect-ratio:1;background:white;border:0;border-radius:10px;font-size:25px;font-weight:bold}" +
-                      ".done{background:#d1fae5}" +
-                      ".wrong{background:#fecaca}" +
-                      "select{padding:12px;border:0;border-radius:10px;background:#eee}" +
-                      "</style></head><body>" +
-                      "<div class='app'>" +
-                      "<h1>🧠 舒尔特训练</h1>" +
-                      "<div class='card'>" +
-                      "<p>方格大小：</p>" +
-                      "<select id='size'>" +
-                      "<option>3</option><option>4</option>" +
-                      "<option selected>5</option><option>6</option>" +
-                      "<option>7</option><option>8</option><option>9</option>" +
-                      "</select>" +
-                      "<p>模式：</p>" +
-                      "<select id='mode'>" +
-                      "<option value='normal'>正序 1 → N</option>" +
-                      "<option value='reverse'>倒序 N → 1</option>" +
-                      "</select>" +
-                      "</div>" +
-                      "<div class='card' style='text-align:center'>" +
-                      "<b id='time'>0.00</b> 秒　目标：<b id='target'>1</b>　错误：<b id='wrong'>0</b>" +
-                      "</div>" +
-                      "<div id='board'></div>" +
-                      "<div class='card'>" +
-                      "<button class='primary' onclick='start()'>开始新一局</button>" +
-                      "</div>" +
-                      "</div>" +
-                      "<script>" +
-                      "let n=5,target=1,mode='normal',startTime=0,timer=null,wrong=0;" +
-                      "function shuffle(a){for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}" +
-                      "function start(){" +
-                      "n=+document.getElementById('size').value;" +
-                      "mode=document.getElementById('mode').value;" +
-                      "let total=n*n;" +
-                      "target=mode==='normal'?1:total;" +
-                      "wrong=0;" +
-                      "document.getElementById('wrong').textContent=0;" +
-                      "document.getElementById('target').textContent=target;" +
-                      "let a=shuffle(Array.from({length:total},(_,i)=>i+1));" +
-                      "let board=document.getElementById('board');" +
-                      "board.style.gridTemplateColumns='repeat('+n+',1fr)';" +
-                      "board.innerHTML='';" +
-                      "a.forEach(x=>{" +
-                      "let b=document.createElement('button');" +
-                      "b.className='cell';b.textContent=x;" +
-                      "b.onclick=()=>tap(b,x);board.appendChild(b)" +
-                      "});" +
-                      "startTime=performance.now();clearInterval(timer);" +
-                      "timer=setInterval(()=>document.getElementById('time').textContent=((performance.now()-startTime)/1000).toFixed(2),30)" +
-                      "}" +
-                      "function tap(b,x){" +
-                      "if(x!==target){wrong++;document.getElementById('wrong').textContent=wrong;b.classList.add('wrong');return}" +
-                      "b.classList.add('done');b.disabled=true;" +
-                      "target=mode==='normal'?target+1:target-1;" +
-                      "let total=n*n;" +
-                      "if((mode==='normal'&&target>total)||(mode==='reverse'&&target<1)){" +
-                      "clearInterval(timer);" +
-                      "let t=((performance.now()-startTime)/1000).toFixed(2);" +
-                      "setTimeout(()=>alert('完成！\\n用时：'+t+' 秒\\n错误：'+wrong+' 次'),100)" +
-                      "}else document.getElementById('target').textContent=target" +
-                      "}" +
-                      "start();" +
-                      "</script></body></html>";
-
-                  web.loadDataWithBaseURL(
-                      null,
-                      html,
-                      "text/html",
-                      "UTF-8",
-                      null
-                  );
+                  web.loadUrl("file:///android_asset/index.html");
 
                   setContentView(web);
               }
           }
           EOF
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
+      - name: Create complete app
+        shell: bash
+        run: |
+          cat > app/src/main/assets/index.html <<'EOF'
+          <!doctype html>
+          <html lang="zh-CN">
+          <head>
+          <meta charset="utf-8">
+          <meta name="viewport"
+                content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+
+          <title>舒尔特训练</title>
+
+          <style>
+          :root{
+            --bg:#f4f5f7;
+            --card:#fff;
+            --text:#111827;
+            --muted:#6b7280;
+            --soft:#eef0f3;
+            --accent:#111827;
+            --ok:#d1fae5;
+            --danger:#fee2e2;
+          }
+
+          body.dark{
+            --bg:#0f1115;
+            --card:#191c22;
+            --text:#f3f4f6;
+            --muted:#9ca3af;
+            --soft:#272b33;
+            --accent:#f3f4f6;
+            --ok:#164e3b;
+            --danger:#5b2020;
+          }
+
+          *{
+            box-sizing:border-box;
+            -webkit-tap-highlight-color:transparent;
+          }
+
+          body{
+            margin:0;
+            background:var(--bg);
+            color:var(--text);
+            font-family:-apple-system,BlinkMacSystemFont,
+            "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+          }
+
+          .app{
+            max-width:680px;
+            min-height:100vh;
+            margin:auto;
+            padding:18px 14px 30px;
+          }
+
+          header{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            margin-bottom:18px;
+          }
+
+          .logo{
+            font-size:24px;
+            font-weight:800;
+          }
+
+          .theme{
+            width:44px;
+            height:44px;
+            border:0;
+            border-radius:14px;
+            background:var(--soft);
+            font-size:20px;
+          }
+
+          .page{
+            display:none;
+          }
+
+          .page.active{
+            display:block;
+          }
+
+          .card{
+            background:var(--card);
+            border-radius:22px;
+            padding:18px;
+            margin-bottom:14px;
+            box-shadow:0 5px 22px #0000000c;
+          }
+
+          .hero{
+            text-align:center;
+            padding:28px 18px;
+          }
+
+          h1{
+            font-size:30px;
+            margin:0 0 8px;
+          }
+
+          h2{
+            margin:0;
+          }
+
+          p{
+            color:var(--muted);
+          }
+
+          button,
+          select{
+            font-family:inherit;
+          }
+
+          button{
+            border:0;
+            cursor:pointer;
+          }
+
+          .primary,
+          .secondary,
+          .back{
+            min-height:48px;
+            border-radius:14px;
+            font-size:16px;
+            font-weight:700;
+          }
+
+          .primary{
+            width:100%;
+            background:var(--accent);
+            color:var(--bg);
+          }
+
+          .secondary{
+            width:100%;
+            background:var(--soft);
+            color:var(--text);
+          }
+
+          .back{
+            width:46px;
+            background:var(--soft);
+            color:var(--text);
+            font-size:26px;
+          }
+
+          .grid2{
+            display:grid;
+            grid-template-columns:1fr 1fr;
+            gap:10px;
+          }
+
+          .stats{
+            display:grid;
+            grid-template-columns:repeat(3,1fr);
+            gap:8px;
+          }
+
+          .stat{
+            background:var(--soft);
+            border-radius:14px;
+            padding:11px 4px;
+            text-align:center;
+          }
+
+          .stat b{
+            display:block;
+            font-size:20px;
+          }
+
+          .stat span{
+            color:var(--muted);
+            font-size:12px;
+          }
+
+          label{
+            display:block;
+            margin-bottom:6px;
+            color:var(--muted);
+            font-size:13px;
+          }
+
+          select{
+            width:100%;
+            height:46px;
+            padding:0 10px;
+            border:0;
+            border-radius:12px;
+            background:var(--soft);
+            color:var(--text);
+            font-size:15px;
+          }
+
+          .option{
+            margin-top:12px;
+          }
+
+          .titlebar{
+            display:flex;
+            align-items:center;
+            gap:10px;
+            margin-bottom:14px;
+          }
+
+          #board{
+            display:grid;
+            gap:6px;
+            margin:14px 0;
+          }
+
+          .cell{
+            aspect-ratio:1;
+            border:0;
+            border-radius:10px;
+            background:var(--card);
+            color:var(--text);
+            box-shadow:0 2px 8px #00000012;
+            font-weight:800;
+            font-size:clamp(16px,7vw,34px);
+          }
+
+          .cell.done{
+            background:var(--ok);
+          }
+
+          .cell.wrong{
+            animation:shake .18s linear 2;
+            background:var(--danger);
+          }
+
+          @keyframes shake{
+            25%{transform:translateX(-4px)}
+            75%{transform:translateX(4px)}
+          }
+
+          .message{
+            text-align:center;
+            min-height:22px;
+            color:var(--muted);
+            font-size:13px;
+            margin:8px;
+          }
+
+          .historyRow{
+            display:flex;
+            justify-content:space-between;
+            padding:13px 0;
+            border-bottom:1px solid var(--soft);
+          }
+
+          .historyRow:last-child{
+            border-bottom:0;
+          }
+
+          .empty{
+            text-align:center;
+            color:var(--muted);
+            padding:20px;
+          }
+
+          .modalBg{
+            position:fixed;
+            inset:0;
+            display:none;
+            align-items:center;
+            justify-content:center;
+            padding:20px;
+            background:#0008;
+          }
+
+          .modal{
+            width:100%;
+            max-width:380px;
+            padding:25px;
+            border-radius:24px;
+            background:var(--card);
+            color:var(--text);
+            text-align:center;
+          }
+
+          .score{
+            margin:8px;
+            font-size:52px;
+            font-weight:900;
+          }
+          </style>
+          </head>
+
+          <body>
+
+          <div class="app">
+
+          <header>
+            <div class="logo">🧠 舒尔特训练</div>
+            <button class="theme" id="theme">☀️</button>
+          </header>
+
+          <section id="home" class="page active">
+
+            <div class="card hero">
+              <h1>专注力训练</h1>
+              <p>每天几分钟，训练视觉搜索与注意力。</p>
+              <button class="primary" id="goTrain">开始训练</button>
+            </div>
+
+            <div class="card">
+              <div class="stats">
+                <div class="stat">
+                  <b id="homeBest">—</b>
+                  <span>最佳成绩</span>
+                </div>
+
+                <div class="stat">
+                  <b id="homeAvg">—</b>
+                  <span>平均成绩</span>
+                </div>
+
+                <div class="stat">
+                  <b id="homeCount">0</b>
+                  <span>训练次数</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid2">
+              <button class="secondary" id="goHistory">📊 成绩记录</button>
+              <button class="secondary" id="quick">⚡ 快速开始</button>
+            </div>
+
+          </section>
+
+
+          <section id="setup" class="page">
+
+            <div class="titlebar">
+              <button class="back" data-back="home">‹</button>
+              <h2>训练设置</h2>
+            </div>
+
+            <div class="card">
+
+              <div class="grid2">
+
+                <div>
+                  <label>方格大小</label>
+                  <select id="size">
+                    <option value="3">3 × 3</option>
+                    <option value="4">4 × 4</option>
+                    <option value="5" selected>5 × 5</option>
+                    <option value="6">6 × 6</option>
+                    <option value="7">7 × 7</option>
+                    <option value="8">8 × 8</option>
+                    <option value="9">9 × 9</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label>模式</label>
+                  <select id="mode">
+                    <option value="normal">正序</option>
+                    <option value="reverse">倒序</option>
+                  </select>
+                </div>
+
+              </div>
+
+              <div class="option">
+                <label>内容</label>
+                <select id="content">
+                  <option value="number">数字</option>
+                  <option value="letter">字母</option>
+                </select>
+              </div>
+
+              <button class="primary"
+                      id="begin"
+                      style="margin-top:16px">
+                开始本局
+              </button>
+
+            </div>
+
+          </section>
+
+
+          <section id="train" class="page">
+
+            <div class="titlebar">
+              <button class="back" data-back="setup">‹</button>
+              <h2>训练中</h2>
+            </div>
+
+            <div class="stats">
+
+              <div class="stat">
+                <b id="timer">0.00</b>
+                <span>秒</span>
+              </div>
+
+              <div class="stat">
+                <b id="target">1</b>
+                <span>目标</span>
+              </div>
+
+              <div class="stat">
+                <b id="mistakes">0</b>
+                <span>错误</span>
+              </div>
+
+            </div>
+
+            <div id="board"></div>
+
+            <div id="message" class="message">
+              寻找目标
+            </div>
+
+            <button class="secondary" id="restart">
+              重新开始
+            </button>
+
+          </section>
+
+
+          <section id="history" class="page">
+
+            <div class="titlebar">
+              <button class="back" data-back="home">‹</button>
+              <h2>成绩记录</h2>
+            </div>
+
+            <div class="card" id="historyList"></div>
+
+            <button class="secondary" id="clearHistory">
+              清空记录
+            </button>
+
+          </section>
+
+          </div>
+
+
+          <div class="modalBg" id="modalBg">
+
+            <div class="modal">
+
+              <h2>完成训练 🎉</h2>
+
+              <div class="score" id="finalScore">
+                0.00s
+              </div>
+
+              <p id="finalText"></p>
+
+              <button class="primary" id="again">
+                再来一局
+              </button>
+
+            </div>
+
+          </div>
+
+
+          <script>
+
+          const $ = id => document.getElementById(id);
+
+          let size = 5;
+          let mode = "normal";
+          let content = "number";
+          let target = 1;
+          let total = 25;
+          let wrong = 0;
+          let startAt = 0;
+          let timerId = null;
+          let running = false;
+
+          const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+
+          function records(){
+
+            try{
+              return JSON.parse(
+                localStorage.getItem("schulte-records") || "[]"
+              );
+            }catch(e){
+              return [];
+            }
+
+          }
+
+
+          function saveRecord(record){
+
+            let list = records();
+
+            list.unshift(record);
+
+            list = list.slice(0,50);
+
+            localStorage.setItem(
+              "schulte-records",
+              JSON.stringify(list)
+            );
+
+          }
+
+
+          function show(id){
+
+            document
+              .querySelectorAll(".page")
+              .forEach(p => p.classList.remove("active"));
+
+            $(id).classList.add("active");
+
+            if(id === "home") updateHome();
+
+            if(id === "history") renderHistory();
+
+          }
+
+
+          function updateHome(){
+
+            const list = records();
+
+            const times = list.map(x => x.time);
+
+            $("homeCount").textContent = list.length;
+
+            $("homeBest").textContent =
+              times.length
+              ? Math.min(...times).toFixed(2)
+              : "—";
+
+            $("homeAvg").textContent =
+              times.length
+              ? (times.reduce((a,b)=>a+b,0)/times.length).toFixed(2)
+              : "—";
+
+          }
+
+
+          function renderHistory(){
+
+            const list = records();
+
+            if(!list.length){
+
+              $("historyList").innerHTML =
+                '<div class="empty">还没有训练记录</div>';
+
+              return;
+
+            }
+
+            $("historyList").innerHTML =
+              list.slice(0,20).map((r,i)=>`
+
+                <div class="historyRow">
+
+                  <span>
+                    ${i+1}.
+                    ${r.size}×${r.size}
+                    · ${r.mode === "normal" ? "正序" : "倒序"}
+                    · ${r.content === "letter" ? "字母" : "数字"}
+                  </span>
+
+                  <b>${r.time.toFixed(2)}s</b>
+
+                </div>
+
+              `).join("");
+
+          }
+
+
+          function shuffle(array){
+
+            for(let i=array.length-1;i>0;i--){
+
+              const j =
+                Math.floor(Math.random()*(i+1));
+
+              [array[i],array[j]] =
+                [array[j],array[i]];
+
+            }
+
+            return array;
+
+          }
+
+
+          function values(){
+
+            total = size * size;
+
+            if(content === "number"){
+
+              return Array.from(
+                {length:total},
+                (_,i)=>String(i+1)
+              );
+
+            }
+
+            return Array.from(
+              {length:total},
+              (_,i)=>letters[i % 26]
+            );
+
+          }
+
+
+          function expected(){
+
+            if(content === "number")
+              return String(target);
+
+            return letters[(target-1)%26];
+
+          }
+
+
+          function setupGame(){
+
+            size = +$("size").value;
+
+            mode = $("mode").value;
+
+            content = $("content").value;
+
+            target =
+              mode === "normal"
+              ? 1
+              : size * size;
+
+            wrong = 0;
+
+            $("mistakes").textContent = 0;
+
+            const list = shuffle(values());
+
+            $("target").textContent = expected();
+
+            $("board").style.gridTemplateColumns =
+              `repeat(${size},1fr)`;
+
+            $("board").innerHTML = "";
+
+            list.forEach(value => {
+
+              const button =
+                document.createElement("button");
+
+              button.className = "cell";
+
+              button.textContent = value;
+
+              button.onclick =
+                () => tap(button,value);
+
+              $("board").appendChild(button);
+
+            });
+
+            $("message").textContent =
+              "开始！按顺序寻找目标。";
+
+          }
+
+
+          function start(){
+
+            setupGame();
+
+            running = true;
+
+            startAt = performance.now();
+
+            clearInterval(timerId);
+
+            timerId = setInterval(()=>{
+
+              $("timer").textContent =
+                ((performance.now()-startAt)/1000)
+                .toFixed(2);
+
+            },30);
+
+          }
+
+
+          function tap(button,value){
+
+            if(!running) return;
+
+            if(value !== expected()){
+
+              wrong++;
+
+              $("mistakes").textContent = wrong;
+
+              button.classList.remove("wrong");
+
+              void button.offsetWidth;
+
+              button.classList.add("wrong");
+
+              $("message").textContent =
+                "找错了，再集中一点！";
+
+              return;
+
+            }
+
+            button.classList.add("done");
+
+            button.disabled = true;
+
+            target =
+              mode === "normal"
+              ? target + 1
+              : target - 1;
+
+            if(
+              (mode === "normal" && target > total) ||
+              (mode === "reverse" && target < 1)
+            ){
+
+              finish();
+
+              return;
+
+            }
+
+            $("target").textContent =
+              expected();
+
+          }
+
+
+          function finish(){
+
+            running = false;
+
+            clearInterval(timerId);
+
+            const time =
+              (performance.now()-startAt)/1000;
+
+            $("timer").textContent =
+              time.toFixed(2);
+
+            saveRecord({
+              time,
+              size,
+              mode,
+              content,
+              wrong,
+              date:Date.now()
+            });
+
+            $("finalScore").textContent =
+              time.toFixed(2) + "s";
+
+            $("finalText").textContent =
+              `${size}×${size} · 错误 ${wrong} 次`;
+
+            $("modalBg").style.display =
+              "flex";
+
+          }
+
+
+          $("goTrain").onclick =
+            () => show("setup");
+
+
+          $("quick").onclick =
+            () => {
+
+              show("setup");
+
+              setTimeout(start,100);
+
+              setTimeout(
+                () => show("train"),
+                110
+              );
+
+            };
+
+
+          $("goHistory").onclick =
+            () => show("history");
+
+
+          $("begin").onclick =
+            () => {
+
+              show("train");
+
+              start();
+
+            };
+
+
+          $("restart").onclick =
+            () => start();
+
+
+          $("again").onclick =
+            () => {
+
+              $("modalBg").style.display =
+                "none";
+
+              show("train");
+
+              start();
+
+            };
+
+
+          $("clearHistory").onclick =
+            () => {
+
+              if(confirm("确定清空所有成绩？")){
+
+                localStorage.removeItem(
+                  "schulte-records"
+                );
+
+                updateHome();
+
+                renderHistory();
+
+              }
+
+            };
+
+
+          document
+            .querySelectorAll("[data-back]")
+            .forEach(button => {
+
+              button.onclick =
+                () => {
+
+                  running = false;
+
+                  clearInterval(timerId);
+
+                  show(button.dataset.back);
+
+                };
+
+            });
+
+
+          $("theme").onclick =
+            () => {
+
+              document.body.classList.toggle("dark");
+
+              const dark =
+                document.body.classList.contains("dark");
+
+              localStorage.setItem(
+                "schulte-dark",
+                dark ? "1" : "0"
+              );
+
+              $("theme").textContent =
+                dark ? "🌙" : "☀️";
+
+            };
+
+
+          if(
+            localStorage.getItem("schulte-dark") === "1"
+          ){
+
+            document.body.classList.add("dark");
+
+            $("theme").textContent = "🌙";
+
+          }
+
+
+          updateHome();
+
+          </script>
+
+          </body>
+          </html>
+          EOF
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -220,5 +1055,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Schulte-App-v2
+          name: Schulte-App-v3
           path: app/build/outputs/apk/debug/app-debug.apk
